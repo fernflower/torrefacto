@@ -38,12 +38,15 @@ def fetch_data():
     sorts = soup.findAll("div", attrs={"class": "morh"})
     results = []
     for sort in sorts:
+        name = sort.h3.text.encode('utf-8')
         url_tag = sort.find("a")
         num_tag = sort.find("span", attrs={"class": "num"})
         url = urlparse.urljoin(SITE_URL, url_tag.get("href"))
         num = int(num_tag.text.replace('&nbsp;', ''))
         price_s, price_l = fetch_prices(url)
-        results.append((num, url, price_s, price_l))
+        if price_s or price_l:
+            # coffee can be ordered
+            results.append((num, url, price_s, price_l, name))
     return sorted(results, key=lambda x: x[0])
 
 
@@ -61,11 +64,14 @@ def main():
         header_writer.writerow(["Torrefacto prices %s" % date])
         writer = csv.DictWriter(
             stream,
-            fieldnames=['number', 'url', '150 gr', '450 gr'])
+            fieldnames=['number', 'url', 'price', 'name'])
         writer.writeheader()
         for res in fetch_data():
-            writer.writerow({'number': "# %d" % res[0], 'url': res[1],
-                             '150 gr': res[2], '450 gr': res[3]})
+            for i in [2, 3]:
+                size = "150 gr" if i == 2 else "450 gr"
+                writer.writerow({'number': "# %d (%s)" % (res[0], size),
+                                 'url': res[1], 'price': res[i],
+                                 'name': res[4]})
 
 if __name__ == "__main__":
     main()
