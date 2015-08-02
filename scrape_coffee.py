@@ -1,61 +1,85 @@
 from __future__ import print_function
+from functools import reduce
 import sys
 
-import BeautifulSoup
+import collections
 import csv
 import datetime
-import urllib
-import urlparse
+from pyquery import PyQuery as pq
+import urllib.parse
+import urllib.request
 
 
 SITE_URL = "http://www.torrefacto.ru"
 PAGE_URL = "http://www.torrefacto.ru/catalog/roasted/"
 
 
-def fetch_prices(sort_url):
-    """Used to retrieve the prices of the precise sort"""
-    # by default prices for roasted 150/450 grammes are retrieved
-    data = urllib.urlopen(sort_url)
-    soup = BeautifulSoup.BeautifulSoup(data)
+def _get_dom(url):
+    """Fetch data and build beautiful soup tree"""
+    req = urllib.request.Request(PAGE_URL)
+    with urllib.request.urlopen(req) as response:
+        data = response.read()
+    return pq(data)
 
-    price_tags = soup.findAll('div', attrs={'class': 'row obj'})
-    if len(price_tags) == 0:
-        # out of stock
-        return None, None
-    # in case of markup changes -> fail here
-    assert len(price_tags) == 2
-    prices = []
-    for price in price_tags:
-        str_price = price.find("input").get("value")
-        prices.append(int(str_price.split('-')[1]))
-    return tuple(prices)
+
+def _tuple_print(data, stream):
+    tuple_str = reduce(lambda x, y: x + y, ["%s " % elem for elem in data],
+                       "#")
+    print(tuple_str, file=stream)
+
+
+# FIXME change to normal exception workflow on page source change
+def _assert_one(col):
+    assert(len(col) == 1)
+    return col[0]
 
 
 def fetch_data():
-    data = urllib.urlopen(PAGE_URL).read()
-    soup = BeautifulSoup.BeautifulSoup(data)
+    # here a mapping 'order num/coffee url' is stored
+    results = {}
 
-    sorts = soup.findAll("div", attrs={"class": "morh"})
-    results = []
+    dom = _get_dom(PAGE_URL)
+    sorts = dom.find('li[id*="bx_"]')
+
     for sort in sorts:
-        name = sort.h3.text.encode('utf-8')
-        url_tag = sort.find("a")
-        num_tag = sort.find("span", attrs={"class": "num"})
-        url = urlparse.urljoin(SITE_URL, url_tag.get("href"))
-        num = int(num_tag.text.replace('&nbsp;', ''))
-        price_s, price_l = fetch_prices(url)
-        if price_s or price_l:
-            # coffee can be ordered
-            results.append((num, url, price_s, price_l, name))
-    return sorted(results, key=lambda x: x[0])
+        sort_info = _assert_one(sort.find_class('morh'))
+        price_info = sort.find_class('price-hold')
+        # No price info means that coffee is out of stock
+        if not price_info:
+            continue
+        else:
+            price_info = _assert_one(price_info)
+
+        # there should be precisely 1 element containing item number
+        num_tag = _assert_one(sort_info.find_class('n'))
+        name = sort_info.find('h3').text.encode('utf-8').strip()
+        url = urllib.parse.urljoin(SITE_URL, sort_info.find('a').get('href'))
+        num = int(num_tag.tail.strip())
+        price_block = _assert_one(price_info.find_class('price-block'))
+        # fetch weight and price for different combinations
+        sizes = []
+        for div in price_block.findall('div'):
+            weight = _assert_one(div.find_class('weight'))
+            price = _assert_one(div.find_class('price'))
+            sizes.append((weight.text.strip(), int(price.text.strip())))
+        # coffee can be ordered
+        # FIXME remove direct tuple index reference
+        results[num] = {"url": url, "150 gr": sizes[0][1],
+                        "450 gr": sizes[1][1], "name": name,
+                        "num": num}
+    return collections.OrderedDict(sorted(results.items()))
 
 
 def main():
     out_csv = '--csv' in sys.argv
     stream = sys.stdout
+
+    sorts = fetch_data()
     if not out_csv:
-        for res in fetch_data():
-            print("#%d %s\n" % (res[0], res[1]), file=stream)
+        for coffee_num in sorts:
+            print("#%(num)s %(url)s %(150 gr)s %(450 gr)s %(name)s" %
+                  sorts[coffee_num], file=stream)
+
     else:
         header_writer = csv.writer(stream)
         # set current date and time
@@ -64,14 +88,15 @@ def main():
         header_writer.writerow(["Torrefacto prices %s" % date])
         writer = csv.DictWriter(
             stream,
-            fieldnames=['number', 'url', 'price', 'name'])
+            fieldnames=['num', 'url', 'price', 'name'])
         writer.writeheader()
-        for res in fetch_data():
-            for i in [2, 3]:
-                size = "150 gr" if i == 2 else "450 gr"
-                writer.writerow({'number': "# %d (%s)" % (res[0], size),
-                                 'url': res[1], 'price': res[i],
-                                 'name': res[4]})
+        for coffee_num in sorts:
+            sort = sorts[coffee_num]
+            for size in ['150 gr', '450 gr']:
+                writer.writerow({'num': "# %d (%s)" % (coffee_num, size),
+                                 'url': sort['url'],
+                                 'price': sort[size],
+                                 'name': sort['name']})
 
 if __name__ == "__main__":
     main()

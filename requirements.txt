@@ -1,1 +1,1 @@
-BeautifulSoup==3.2.1
+pyquery==1.2.8
