@@ -70,6 +70,26 @@ def fetch_data():
     return collections.OrderedDict(sorted(results.items()))
 
 
+def fetch_data_as_csv(stream):
+    sorts = fetch_data()
+    header_writer = csv.writer(stream)
+    # set current date and time
+    date = datetime.datetime.strftime(datetime.datetime.now(),
+                                      '%Y-%m-%d %H:%M:%S')
+    header_writer.writerow(["Torrefacto prices %s" % date])
+    writer = csv.DictWriter(
+        stream,
+        fieldnames=['num', 'url', 'price', 'name'])
+    writer.writeheader()
+    for coffee_num in sorts:
+        sort = sorts[coffee_num]
+        for size in ['150 gr', '450 gr']:
+            writer.writerow({'num': "# %d (%s)" % (coffee_num, size),
+                             'url': sort['url'],
+                             'price': sort[size],
+                             'name': sort['name']})
+
+
 def main():
     out_csv = '--csv' in sys.argv
     stream = sys.stdout
@@ -81,22 +101,7 @@ def main():
                   sorts[coffee_num], file=stream)
 
     else:
-        header_writer = csv.writer(stream)
-        # set current date and time
-        date = datetime.datetime.strftime(datetime.datetime.now(),
-                                          '%Y-%m-%d %H:%M:%S')
-        header_writer.writerow(["Torrefacto prices %s" % date])
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=['num', 'url', 'price', 'name'])
-        writer.writeheader()
-        for coffee_num in sorts:
-            sort = sorts[coffee_num]
-            for size in ['150 gr', '450 gr']:
-                writer.writerow({'num': "# %d (%s)" % (coffee_num, size),
-                                 'url': sort['url'],
-                                 'price': sort[size],
-                                 'name': sort['name']})
+        fetch_data_as_csv(stream)
 
 if __name__ == "__main__":
     main()
