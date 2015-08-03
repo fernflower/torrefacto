@@ -52,7 +52,7 @@ def fetch_data():
 
         # there should be precisely 1 element containing item number
         num_tag = _assert_one(sort_info.find_class('n'))
-        name = sort_info.find('h3').text.encode('utf-8').strip()
+        name = sort_info.find('h3').text.strip()
         url = urllib.parse.urljoin(SITE_URL, sort_info.find('a').get('href'))
         num = int(num_tag.tail.strip())
         price_block = _assert_one(price_info.find_class('price-block'))
@@ -70,24 +70,26 @@ def fetch_data():
     return collections.OrderedDict(sorted(results.items()))
 
 
-def fetch_data_as_csv(stream):
+def fetch_data_csv_tuples():
+    # returns a generator producing csv line data as tuples
     sorts = fetch_data()
-    header_writer = csv.writer(stream)
-    # set current date and time
-    date = datetime.datetime.strftime(datetime.datetime.now(),
-                                      '%Y-%m-%d %H:%M:%S')
-    header_writer.writerow(["Torrefacto prices %s" % date])
-    writer = csv.DictWriter(
-        stream,
-        fieldnames=['num', 'url', 'price', 'name'])
-    writer.writeheader()
     for coffee_num in sorts:
         sort = sorts[coffee_num]
         for size in ['150 gr', '450 gr']:
-            writer.writerow({'num': "# %d (%s)" % (coffee_num, size),
-                             'url': sort['url'],
-                             'price': sort[size],
-                             'name': sort['name']})
+            line = ("# %d (%s)" % (coffee_num, size), sort['url'],
+                    sort[size], sort['name'])
+            yield line
+
+
+def fetch_data_as_csv(stream):
+    fieldnames = ('num', 'url', 'price', 'name')
+    # set current date and time
+    date = datetime.datetime.strftime(datetime.datetime.now(),
+                                      '%Y-%m-%d %H:%M:%S')
+    writer = csv.writer(stream)
+    writer.writerow(["Torrefacto prices %s" % date])
+    writer.writerow(fieldnames)
+    writer.writerows(fetch_data_csv_tuples())
 
 
 def main():
