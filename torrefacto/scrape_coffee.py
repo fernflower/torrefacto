@@ -53,6 +53,8 @@ def fetch_data():
         # there should be precisely 1 element containing item number
         num_tag = _assert_one(sort_info.find_class('n'))
         name = sort_info.find('h3').text.strip()
+        name_part = _assert_one(sort_info.find_class('smaller')).text or ""
+        full_name = "%s %s" % (name, name_part.strip())
         url = urllib.parse.urljoin(SITE_URL, sort_info.find('a').get('href'))
         num = int(num_tag.tail.strip())
         price_block = _assert_one(price_info.find_class('price-block'))
@@ -65,7 +67,7 @@ def fetch_data():
         # coffee can be ordered
         # FIXME remove direct tuple index reference
         results[num] = {"url": url, "150 gr": sizes[0][1],
-                        "450 gr": sizes[1][1], "name": name,
+                        "450 gr": sizes[1][1], "name": full_name,
                         "num": num}
     return collections.OrderedDict(sorted(results.items()))
 
