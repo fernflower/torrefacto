@@ -66,8 +66,8 @@ def fetch_data():
             sizes.append((weight.text.strip(), int(price.text.strip())))
         # coffee can be ordered
         # FIXME remove direct tuple index reference
-        results[num] = {"url": url, "150 gr": sizes[0][1],
-                        "450 gr": sizes[1][1], "name": full_name,
+        results[num] = {"url": url, "150_gr": sizes[0][1],
+                        "450_gr": sizes[1][1], "name": full_name,
                         "num": num}
     return collections.OrderedDict(sorted(results.items()))
 
@@ -77,9 +77,9 @@ def fetch_data_csv_tuples():
     sorts = fetch_data()
     for coffee_num in sorts:
         sort = sorts[coffee_num]
-        for size in ['150 gr', '450 gr']:
-            line = ("# %d (%s)" % (coffee_num, size), sort['url'],
-                    sort[size], sort['name'])
+        for size in ['150_gr', '450_gr']:
+            line = ("# %d (%s)" % (coffee_num, size.replace('_', '')),
+                    sort['url'], sort[size], sort['name'])
             yield line
 
 
